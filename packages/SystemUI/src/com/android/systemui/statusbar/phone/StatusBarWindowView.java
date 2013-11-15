@@ -16,18 +16,17 @@
 
 package com.android.systemui.statusbar.phone;
 
+import android.app.StatusBarManager;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewRootImpl;
 import android.widget.FrameLayout;
 import android.widget.ScrollView;
-import android.widget.TextSwitcher;
 
 import com.android.systemui.ExpandHelper;
 import com.android.systemui.R;
@@ -74,6 +73,12 @@ public class StatusBarWindowView extends FrameLayout
     }
 
     @Override
+    public void dispatchWindowFocusChanged(boolean hasFocus) {
+        this.setFocusableInTouchMode(hasFocus);
+        this.requestFocus();
+    }
+
+    @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
         switch (event.getKeyCode()) {
@@ -112,6 +117,10 @@ public class StatusBarWindowView extends FrameLayout
         }
         if (!handled) {
             handled = super.onTouchEvent(ev);
+        }
+        final int action = ev.getAction();
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            mService.setInteracting(StatusBarManager.WINDOW_STATUS_BAR, false);
         }
         return handled;
     }

@@ -21,9 +21,9 @@
 #include "PointerController.h"
 #include "InputListener.h"
 
-#include <androidfw/Input.h>
-#include <androidfw/VelocityControl.h>
-#include <androidfw/VelocityTracker.h>
+#include <input/Input.h>
+#include <input/VelocityControl.h>
+#include <input/VelocityTracker.h>
 #include <utils/KeyedVector.h>
 #include <utils/threads.h>
 #include <utils/Timers.h>
@@ -409,7 +409,7 @@ public:
 
 protected:
     // These members are protected so they can be instrumented by test cases.
-    virtual InputDevice* createDeviceLocked(int32_t deviceId,
+    virtual InputDevice* createDeviceLocked(int32_t deviceId, int32_t controllerNumber,
             const InputDeviceIdentifier& identifier, uint32_t classes);
 
     class ContextImpl : public InputReaderContext {
@@ -507,16 +507,17 @@ private:
 /* Represents the state of a single input device. */
 class InputDevice {
 public:
-    InputDevice(InputReaderContext* context, int32_t id, int32_t generation,
-            const InputDeviceIdentifier& identifier, uint32_t classes);
+    InputDevice(InputReaderContext* context, int32_t id, int32_t generation, int32_t
+            controllerNumber, const InputDeviceIdentifier& identifier, uint32_t classes);
     ~InputDevice();
 
     inline InputReaderContext* getContext() { return mContext; }
-    inline int32_t getId() { return mId; }
-    inline int32_t getGeneration() { return mGeneration; }
-    inline const String8& getName() { return mIdentifier.name; }
-    inline uint32_t getClasses() { return mClasses; }
-    inline uint32_t getSources() { return mSources; }
+    inline int32_t getId() const { return mId; }
+    inline int32_t getControllerNumber() const { return mControllerNumber; }
+    inline int32_t getGeneration() const { return mGeneration; }
+    inline const String8& getName() const { return mIdentifier.name; }
+    inline uint32_t getClasses() const { return mClasses; }
+    inline uint32_t getSources() const { return mSources; }
 
     inline bool isExternal() { return mIsExternal; }
     inline void setExternal(bool external) { mIsExternal = external; }
@@ -573,6 +574,7 @@ public:
 private:
     InputReaderContext* mContext;
     int32_t mId;
+    int32_t mControllerNumber;
     int32_t mGeneration;
     InputDeviceIdentifier mIdentifier;
     String8 mAlias;
@@ -1205,12 +1207,15 @@ protected:
         bool hasAssociatedDisplay;
         bool associatedDisplayIsExternal;
         bool orientationAware;
+        bool hasButtonUnderPad;
 
         enum GestureMode {
             GESTURE_MODE_POINTER,
             GESTURE_MODE_SPOTS,
         };
         GestureMode gestureMode;
+
+        bool filterTouchEvents;
     } mParameters;
 
     // Immutable calibration parameters in parsed form.
@@ -1282,6 +1287,9 @@ protected:
             if (haveSizeBias) {
                 *outSize += sizeBias;
             }
+            if (*outSize < 0) {
+                *outSize = 0;
+            }
         }
     } mCalibration;
 
@@ -1335,6 +1343,10 @@ protected:
     virtual void resolveCalibration();
     virtual void dumpCalibration(String8& dump);
     virtual bool hasStylus() const = 0;
+
+    virtual void applyFilters(bool* outHavePointerIds);
+    virtual void applyFiltersWithId();
+    virtual void resetFilters();
 
     virtual void syncTouch(nsecs_t when, bool* outHavePointerIds) = 0;
 
@@ -1710,12 +1722,29 @@ protected:
     virtual void configureRawPointerAxes();
     virtual bool hasStylus() const;
 
+    virtual void applyFilters(bool* outHavePointerIds);
+    virtual void resetFilters();
+    virtual void applyBadTouchReleaseFilter();
+    virtual bool applyJumpyTouchFilter();
+
 private:
     MultiTouchMotionAccumulator mMultiTouchMotionAccumulator;
 
     // Specifies the pointer id bits that are in use, and their associated tracking id.
     BitSet32 mPointerIdBits;
     int32_t mPointerTrackingIdMap[MAX_POINTER_ID + 1];
+
+    /* Slop distance for jumpy pointer detection.
+     * The vertical range of the screen divided by this is our epsilon value. */
+    static const uint32_t JUMPY_EPSILON_DIVISOR = 212;
+
+    /* Number of jumpy points to drop for touchscreens that need it. */
+    static const uint32_t JUMPY_TRANSITION_DROPS = 6;
+    static const uint32_t JUMPY_DROP_LIMIT = 3;
+
+    struct JumpyTouchFilterState {
+        uint32_t jumpyPointsDropped;
+    } mJumpyTouchFilter;
 };
 
 

@@ -21,6 +21,7 @@ import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.UnknownHostException;
 import java.util.Collection;
+import java.util.Locale;
 
 import android.util.Log;
 
@@ -101,6 +102,26 @@ public class NetworkUtils {
      * @return the most recent error message, if any
      */
     public native static String getDhcpError();
+
+    /**
+     * Set the SO_MARK of {@code socketfd} to {@code mark}
+     */
+    public native static void markSocket(int socketfd, int mark);
+
+    /**
+     * {@hide}
+     */
+    public native static int addRoutingRule(String param1, String param2, String param3, int param4);
+
+    /**
+     * {@hide}
+     */
+    public native static int delRoutingRule(String param1, String param2, String param3, int param4); 
+
+    /**
+     * {@hide}
+     */
+    public native static int addRoutingTable(String param1, String param2, String param3); 
 
     /**
      * Convert a IPv4 address from an integer to an InetAddress.
@@ -223,7 +244,7 @@ public class NetworkUtils {
     public static InetAddress hexToInet6Address(String addrHexString)
             throws IllegalArgumentException {
         try {
-            return numericToInetAddress(String.format("%s:%s:%s:%s:%s:%s:%s:%s",
+            return numericToInetAddress(String.format(Locale.US, "%s:%s:%s:%s:%s:%s:%s:%s",
                     addrHexString.substring(0,4),   addrHexString.substring(4,8),
                     addrHexString.substring(8,12),  addrHexString.substring(12,16),
                     addrHexString.substring(16,20), addrHexString.substring(20,24),

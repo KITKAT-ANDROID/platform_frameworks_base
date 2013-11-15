@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2006 The Android Open Source Project
+ * This code has been modified.  Portions copyright (C) 2010, T-Mobile USA, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -915,6 +916,14 @@ public abstract class PackageManager {
 
     /**
      * Feature for {@link #getSystemAvailableFeatures} and
+     * {@link #hasSystemFeature}: The device is capable of communicating with
+     * consumer IR devices.
+     */
+    @SdkConstant(SdkConstantType.FEATURE)
+    public static final String FEATURE_CONSUMER_IR = "android.hardware.consumerir";
+
+    /**
+     * Feature for {@link #getSystemAvailableFeatures} and
      * {@link #hasSystemFeature}: The device supports one or more methods of
      * reporting current location.
      */
@@ -952,6 +961,26 @@ public abstract class PackageManager {
      */
     @SdkConstant(SdkConstantType.FEATURE)
     public static final String FEATURE_NFC = "android.hardware.nfc";
+
+    /**
+     * Feature for {@link #getSystemAvailableFeatures} and
+     * {@link #hasSystemFeature}: The device supports host-
+     * based NFC card emulation.
+     *
+     * TODO remove when depending apps have moved to new constant.
+     * @hide
+     * @deprecated
+     */
+    @SdkConstant(SdkConstantType.FEATURE)
+    public static final String FEATURE_NFC_HCE = "android.hardware.nfc.hce";
+
+    /**
+     * Feature for {@link #getSystemAvailableFeatures} and
+     * {@link #hasSystemFeature}: The device supports host-
+     * based NFC card emulation.
+     */
+    @SdkConstant(SdkConstantType.FEATURE)
+    public static final String FEATURE_NFC_HOST_CARD_EMULATION = "android.hardware.nfc.hce";
 
     /**
      * Feature for {@link #getSystemAvailableFeatures} and
@@ -995,6 +1024,20 @@ public abstract class PackageManager {
      */
     @SdkConstant(SdkConstantType.FEATURE)
     public static final String FEATURE_SENSOR_PROXIMITY = "android.hardware.sensor.proximity";
+
+    /**
+     * Feature for {@link #getSystemAvailableFeatures} and
+     * {@link #hasSystemFeature}: The device includes a hardware step counter.
+     */
+    @SdkConstant(SdkConstantType.FEATURE)
+    public static final String FEATURE_SENSOR_STEP_COUNTER = "android.hardware.sensor.stepcounter";
+
+    /**
+     * Feature for {@link #getSystemAvailableFeatures} and
+     * {@link #hasSystemFeature}: The device includes a hardware step detector.
+     */
+    @SdkConstant(SdkConstantType.FEATURE)
+    public static final String FEATURE_SENSOR_STEP_DETECTOR = "android.hardware.sensor.stepdetector";
 
     /**
      * Feature for {@link #getSystemAvailableFeatures} and
@@ -1173,6 +1216,13 @@ public abstract class PackageManager {
      */
     @SdkConstant(SdkConstantType.FEATURE)
     public static final String FEATURE_INPUT_METHODS = "android.software.input_methods";
+
+    /**
+     * Feature for {@link #getSystemAvailableFeatures} and
+     * {@link #hasSystemFeature}: The device supports device policy enforcement via device admins.
+     */
+    @SdkConstant(SdkConstantType.FEATURE)
+    public static final String FEATURE_DEVICE_ADMIN = "android.software.device_admin";
 
     /**
      * Feature for {@link #getSystemAvailableFeatures} and
@@ -1686,6 +1736,17 @@ public abstract class PackageManager {
     public abstract List<PackageInfo> getInstalledPackages(int flags, int userId);
 
     /**
+     * Return a List of all theme packages that are installed
+     * on the device.
+     *
+     * @return A List of PackageInfo objects, one for each theme package
+     *         that is installed on the device.
+     *
+     * @hide
+     */
+    public abstract List<PackageInfo> getInstalledThemePackages();
+
+    /**
      * Check whether a particular package has been granted a particular
      * permission.
      *
@@ -2174,6 +2235,24 @@ public abstract class PackageManager {
      */
     public abstract List<ResolveInfo> queryIntentServicesAsUser(Intent intent,
             int flags, int userId);
+
+    /** {@hide} */
+    public abstract List<ResolveInfo> queryIntentContentProvidersAsUser(
+            Intent intent, int flags, int userId);
+
+    /**
+     * Retrieve all providers that can match the given intent.
+     *
+     * @param intent An intent containing all of the desired specification
+     *            (action, data, type, category, and/or component).
+     * @param flags Additional option flags.
+     * @return A List&lt;ResolveInfo&gt; containing one entry for each matching
+     *         ProviderInfo. These are ordered from best to worst match. If
+     *         there are no matching providers, an empty list is returned.
+     * @see #GET_INTENT_FILTERS
+     * @see #GET_RESOLVED_FILTER
+     */
+    public abstract List<ResolveInfo> queryIntentContentProviders(Intent intent, int flags);
 
     /**
      * Find a single content provider by its base path name.
@@ -3007,6 +3086,13 @@ public abstract class PackageManager {
             List<ComponentName> outActivities, String packageName);
 
     /**
+     * Ask for the set of available 'home' activities and the current explicit
+     * default, if any.
+     * @hide
+     */
+    public abstract ComponentName getHomeActivities(List<ResolveInfo> outActivities);
+
+    /**
      * Set the enabled setting for a package component (activity, receiver, service, provider).
      * This setting will override any enabled state which may have been set by the component in its
      * manifest.
@@ -3083,6 +3169,23 @@ public abstract class PackageManager {
     public abstract int getApplicationEnabledSetting(String packageName);
 
     /**
+     * Puts the package in a blocked state, which is almost like an uninstalled state,
+     * making the package unavailable, but it doesn't remove the data or the actual
+     * package file.
+     * @hide
+     */
+    public abstract boolean setApplicationBlockedSettingAsUser(String packageName, boolean blocked,
+            UserHandle userHandle);
+
+    /**
+     * Returns the blocked state of a package.
+     * @see #setApplicationBlockedSettingAsUser(String, boolean, UserHandle)
+     * @hide
+     */
+    public abstract boolean getApplicationBlockedSettingAsUser(String packageName,
+            UserHandle userHandle);
+
+    /**
      * Return whether the device has been booted into safe mode.
      */
     public abstract boolean isSafeMode();
@@ -3109,7 +3212,7 @@ public abstract class PackageManager {
     /**
      * Returns the device identity that verifiers can use to associate their scheme to a particular
      * device. This should not be used by anything other than a package verifier.
-     * 
+     *
      * @return identity that uniquely identifies current device
      * @hide
      */

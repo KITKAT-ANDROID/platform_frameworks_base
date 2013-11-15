@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2006 The Android Open Source Project
+ * This code has been modified.  Portions copyright (C) 2010, T-Mobile USA, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +25,6 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.RemoteException;
-import android.provider.DrmStore;
 import android.provider.MediaStore;
 import android.provider.Settings;
 import android.util.Log;
@@ -48,12 +48,6 @@ public class Ringtone {
         MediaStore.Audio.Media._ID,
         MediaStore.Audio.Media.DATA,
         MediaStore.Audio.Media.TITLE
-    };
-
-    private static final String[] DRM_COLUMNS = new String[] {
-        DrmStore.Audio._ID,
-        DrmStore.Audio.DATA,
-        DrmStore.Audio.TITLE
     };
 
     private final Context mContext;
@@ -101,14 +95,27 @@ public class Ringtone {
     }
 
     /**
-     * Returns a human-presentable title for ringtone. Looks in media and DRM
-     * content providers. If not in either, uses the filename
+     * Returns a human-presentable title for ringtone. Looks in media
+     * content provider. If not in either, uses the filename
      * 
      * @param context A context used for querying. 
      */
     public String getTitle(Context context) {
         if (mTitle != null) return mTitle;
         return mTitle = getTitle(context, mUri, true);
+    }
+
+    private static String stringForQuery(Cursor cursor) {
+        if (cursor != null) {
+            try {
+                if (cursor.moveToFirst()) {
+                    return cursor.getString(0);
+                }
+            } finally {
+                cursor.close();
+            }
+        }
+        return null;
     }
 
     private static String getTitle(Context context, Uri uri, boolean followSettingsUri) {
@@ -129,11 +136,17 @@ public class Ringtone {
                             .getString(com.android.internal.R.string.ringtone_default_with_actual,
                                     actualTitle);
                 }
+            } else if (RingtoneManager.THEME_AUTHORITY.equals(authority)) {
+                Uri themes = Uri.parse("content://com.tmobile.thememanager.themes/themes");
+                title = stringForQuery(res.query(themes, new String[] { "ringtone_name" },
+                    "ringtone_uri = ?", new String[] { uri.toString() }, null));
+                if (title == null) {
+                    title = stringForQuery(res.query(themes, new String[] { "notif_ringtone_name" },
+                            "notif_ringtone_uri = ?", new String[] { uri.toString() }, null));
+                }
             } else {
                 try {
-                    if (DrmStore.AUTHORITY.equals(authority)) {
-                        cursor = res.query(uri, DRM_COLUMNS, null, null, null);
-                    } else if (MediaStore.AUTHORITY.equals(authority)) {
+                    if (MediaStore.AUTHORITY.equals(authority)) {
                         cursor = res.query(uri, MEDIA_COLUMNS, null, null, null);
                     }
                 } catch (SecurityException e) {
@@ -289,7 +302,7 @@ public class Ringtone {
     private boolean playFallbackRingtone() {
         if (mAudioManager.getStreamVolume(mStreamType) != 0) {
             int ringtoneType = RingtoneManager.getDefaultType(mUri);
-            if (ringtoneType != -1 &&
+            if (ringtoneType == -1 ||
                     RingtoneManager.getActualDefaultRingtoneUri(mContext, ringtoneType) != null) {
                 // Default ringtone, try fallback ringtone.
                 try {
@@ -318,6 +331,8 @@ public class Ringtone {
                 } catch (NotFoundException nfe) {
                     Log.e(TAG, "Fallback ringtone does not exist");
                 }
+            } else {
+                Log.w(TAG, "not playing fallback for " + mUri);
             }
         }
         return false;

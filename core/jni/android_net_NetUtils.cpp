@@ -17,6 +17,7 @@
 #define LOG_TAG "NetUtils"
 
 #include "jni.h"
+#include "JNIHelp.h"
 #include <utils/misc.h>
 #include <android_runtime/AndroidRuntime.h>
 #include <utils/Log.h>
@@ -36,7 +37,8 @@ int dhcp_do_request(const char * const ifname,
                     const char *server,
                     uint32_t *lease,
                     const char *vendorInfo,
-                    const char *domains);
+                    const char *domains,
+                    const char *mtu);
 
 int dhcp_do_request_renew(const char * const ifname,
                     const char *ipaddr,
@@ -46,7 +48,8 @@ int dhcp_do_request_renew(const char * const ifname,
                     const char *server,
                     uint32_t *lease,
                     const char *vendorInfo,
-                    const char *domains);
+                    const char *domains,
+                    const char *mtu);
 
 int dhcp_stop(const char *ifname);
 int dhcp_release_lease(const char *ifname);
@@ -125,19 +128,20 @@ static jboolean android_net_utils_runDhcpCommon(JNIEnv* env, jobject clazz, jstr
     uint32_t lease;
     char vendorInfo[PROPERTY_VALUE_MAX];
     char domains[PROPERTY_VALUE_MAX];
+    char mtu[PROPERTY_VALUE_MAX];
 
     const char *nameStr = env->GetStringUTFChars(ifname, NULL);
     if (nameStr == NULL) return (jboolean)false;
 
     if (renew) {
         result = ::dhcp_do_request_renew(nameStr, ipaddr, gateway, &prefixLength,
-                dns, server, &lease, vendorInfo, domains);
+                dns, server, &lease, vendorInfo, domains, mtu);
     } else {
         result = ::dhcp_do_request(nameStr, ipaddr, gateway, &prefixLength,
-                dns, server, &lease, vendorInfo, domains);
+                dns, server, &lease, vendorInfo, domains, mtu);
     }
     if (result != 0) {
-        ALOGD("dhcp_do_request failed");
+        ALOGD("dhcp_do_request failed : %s (%s)", nameStr, renew ? "renew" : "new");
     }
 
     env->ReleaseStringUTFChars(ifname, nameStr);
@@ -202,6 +206,36 @@ static jboolean android_net_utils_runDhcpCommon(JNIEnv* env, jobject clazz, jstr
     return (jboolean)(result == 0);
 }
 
+#ifdef BOARD_HAVE_SQN_WIMAX
+static jint android_net_utils_addRoutingRule(JNIEnv* env,
+        jobject clazz,
+        jstring param1,
+        jstring param2,
+        jstring param3,
+        jint param4) {
+        int result = 0;
+        return (jint)result;
+}
+
+static jint android_net_utils_delRoutingRule(JNIEnv* env,
+        jobject clazz,
+        jstring param1,
+        jstring param2,
+        jstring param3,
+        jint param4) {
+        int result = 0;
+        return (jint)result;
+}
+
+static jint android_net_utils_addRoutingTable(JNIEnv* env,
+        jobject clazz,
+        jstring param1,
+        jstring param2,
+        jstring param3) {
+        int result = 0;
+        return (jint)result;
+}
+#endif
 
 static jboolean android_net_utils_runDhcp(JNIEnv* env, jobject clazz, jstring ifname, jobject info)
 {
@@ -239,6 +273,13 @@ static jstring android_net_utils_getDhcpError(JNIEnv* env, jobject clazz)
     return env->NewStringUTF(::dhcp_get_errmsg());
 }
 
+static void android_net_utils_markSocket(JNIEnv *env, jobject thiz, jint socket, jint mark)
+{
+    if (setsockopt(socket, SOL_SOCKET, SO_MARK, &mark, sizeof(mark)) < 0) {
+        jniThrowException(env, "java/lang/IllegalStateException", "Error marking socket");
+    }
+}
+
 // ----------------------------------------------------------------------------
 
 /*
@@ -255,6 +296,12 @@ static JNINativeMethod gNetworkUtilMethods[] = {
     { "stopDhcp", "(Ljava/lang/String;)Z",  (void *)android_net_utils_stopDhcp },
     { "releaseDhcpLease", "(Ljava/lang/String;)Z",  (void *)android_net_utils_releaseDhcpLease },
     { "getDhcpError", "()Ljava/lang/String;", (void*) android_net_utils_getDhcpError },
+    { "markSocket", "(II)V", (void*) android_net_utils_markSocket },
+#ifdef BOARD_HAVE_SQN_WIMAX
+    { "addRoutingRule", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)I", (void*) android_net_utils_addRoutingRule },
+    { "delRoutingRule", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)I", (void*) android_net_utils_delRoutingRule },
+    { "addRoutingTable", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I", (void*) android_net_utils_addRoutingTable },
+#endif
 };
 
 int register_android_net_NetworkUtils(JNIEnv* env)

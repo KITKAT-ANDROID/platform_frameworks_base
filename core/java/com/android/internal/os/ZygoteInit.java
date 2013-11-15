@@ -22,9 +22,11 @@ import static libcore.io.OsConstants.S_IRWXO;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
 import android.net.LocalServerSocket;
+import android.opengl.EGL14;
 import android.os.Debug;
 import android.os.Process;
 import android.os.SystemClock;
+import android.os.SystemProperties;
 import android.os.Trace;
 import android.util.EventLog;
 import android.util.Log;
@@ -59,8 +61,9 @@ import java.util.ArrayList;
  * @hide
  */
 public class ZygoteInit {
-
     private static final String TAG = "Zygote";
+
+    private static final String PROPERTY_DISABLE_OPENGL_PRELOADING = "ro.zygote.disable_gl_preload";
 
     private static final String ANDROID_SOCKET_ENV = "ANDROID_SOCKET_zygote";
 
@@ -68,7 +71,10 @@ public class ZygoteInit {
     private static final int LOG_BOOT_PROGRESS_PRELOAD_END = 3030;
 
     /** when preloading, GC after allocating this many bytes */
-    private static final int PRELOAD_GC_THRESHOLD = 50000;
+    private static final String heapgrowthlimit =
+                    SystemProperties.get("dalvik.vm.heapgrowthlimit", "16m");
+    private static final int PRELOAD_GC_THRESHOLD = Integer.parseInt(
+                    heapgrowthlimit.substring(0, heapgrowthlimit.length()-1))*1024*1024/2;
 
     public static final String USAGE_STRING =
             " <\"start-system-server\"|\"\" for startSystemServer>";
@@ -93,7 +99,7 @@ public class ZygoteInit {
     private static final String PRELOADED_CLASSES = "preloaded-classes";
 
     /** Controls whether we should preload resources during zygote init. */
-    private static final boolean PRELOAD_RESOURCES = true;
+    private static final boolean PRELOAD_RESOURCES = false;
 
     /**
      * Invokes a static "main(argv[]) method on class "className".
@@ -227,6 +233,13 @@ public class ZygoteInit {
     static void preload() {
         preloadClasses();
         preloadResources();
+        preloadOpenGL();
+    }
+
+    private static void preloadOpenGL() {
+        if (!SystemProperties.getBoolean(PROPERTY_DISABLE_OPENGL_PRELOADING, false)) {
+            EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY);
+        }
     }
 
     /**
@@ -312,6 +325,9 @@ public class ZygoteInit {
                 // Restore default.
                 runtime.setTargetHeapUtilization(defaultUtilization);
 
+                // Fill in dex caches with classes, fields, and methods brought in by preloading.
+                runtime.preloadDexCaches();
+
                 Debug.stopAllocCounting();
 
                 // Bring back root. We'll need it later.
@@ -355,6 +371,8 @@ public class ZygoteInit {
                 ar.recycle();
                 Log.i(TAG, "...preloaded " + N + " resources in "
                         + (SystemClock.uptimeMillis()-startTime) + "ms.");
+            } else {
+                Log.i(TAG, "Preload resources disabled, skipped.");
             }
             mResources.finishPreloading();
         } catch (RuntimeException e) {
@@ -479,7 +497,6 @@ public class ZygoteInit {
             OsConstants.CAP_NET_BIND_SERVICE,
             OsConstants.CAP_NET_BROADCAST,
             OsConstants.CAP_NET_RAW,
-            OsConstants.CAP_SYS_BOOT,
             OsConstants.CAP_SYS_MODULE,
             OsConstants.CAP_SYS_NICE,
             OsConstants.CAP_SYS_RESOURCE,
@@ -490,7 +507,7 @@ public class ZygoteInit {
         String args[] = {
             "--setuid=1000",
             "--setgid=1000",
-            "--setgroups=1001,1002,1003,1004,1005,1006,1007,1008,1009,1010,1018,3001,3002,3003,3006,3007",
+            "--setgroups=1001,1002,1003,1004,1005,1006,1007,1008,1009,1010,1018,1032,3001,3002,3003,3006,3007",
             "--capabilities=" + capabilities + "," + capabilities,
             "--runtime-init",
             "--nice-name=system_server",

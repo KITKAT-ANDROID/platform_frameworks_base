@@ -36,12 +36,21 @@ LOCAL_SHARED_LIBRARIES := \
     libhardware_legacy \
     libskia \
     libgui \
-    libui
+    libui \
+    libinput
 
 LOCAL_C_INCLUDES := \
     external/skia/include/core
 
-LOCAL_MODULE:= libinput
+ifeq ($(BOARD_USE_LEGACY_TOUCHSCREEN),true)
+LOCAL_CFLAGS += -DLEGACY_TOUCHSCREEN
+endif
+
+ifeq ($(BOARD_USE_LEGACY_TRACKPAD),true)
+LOCAL_CFLAGS += -DLEGACY_TRACKPAD
+endif
+
+LOCAL_MODULE:= libinputservice
 
 LOCAL_MODULE_TAGS := optional
 
